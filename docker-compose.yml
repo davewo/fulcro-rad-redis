@@ -1,0 +1,14 @@
+version: '2.4'
+
+services:
+  redis:
+    image: redis:5.0-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    hostname: redis
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+
+volumes:
+  redis-data: {}
