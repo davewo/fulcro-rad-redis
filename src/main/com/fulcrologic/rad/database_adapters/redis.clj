@@ -4,13 +4,22 @@
     [com.fulcrologic.rad.attributes :as attr]
     [com.fulcrologic.fulcro.algorithms.tempid :as tempid]
     [taoensso.timbre :as log]
-    [taoensso.carmine :as car :refer (wcar)]
+    [taoensso.carmine :as car :refer [wcar]]
     [com.fulcrologic.rad.ids :as ids]))
 
 
 (comment
   (def sample-redis-connection
-    {:pool {} :spec {:host "localhost" :port 6379}}))
+    {:pool {} :spec {:host "localhost" :port 6379}})
+  (wcar {:host "localhost" :port 6379}
+    (car/set "zuz" {:squib :jib})
+    (car/get "zuz"))
+  (wcar {:pool {} :spec {:host "localhost" :port 6379}}
+    (car/get "zuz")))
+
+(defn test-mocking [conn k v]
+  (wcar conn (car/set k v))
+  (wcar conn (car/get k)))
 
 (defn redis-running? [connection]
   (try
