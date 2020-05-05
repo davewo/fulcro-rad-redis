@@ -11,8 +11,10 @@
 
 (declare _)
 
+(def redis-port 54433)
+
 (defn with-mock-redis [test]
-  (let [mock-redis (RedisServer. 12312)]
+  (let [mock-redis (RedisServer. redis-port)]
     (.start mock-redis)
     (test)
     (.stop mock-redis)))
@@ -27,42 +29,44 @@
                       all-attributes))
 
 (def env {::attr/key->attribute key->attribute
-          ::redis/connections   {:redis {:host "localhost" :port 12312}}})
+          ::redis/connections   {:redis {:host "localhost" :port redis-port}}})
+
+(specification "redis CRUD"
+  (let [conn         (-> env ::redis/connections :redis)
+        constant-key (ids/new-uuid 1)
+        random-value (ids/new-uuid)]
+    (assertions
+      "sets a value"
+      (redis/set-value conn constant-key random-value) => "OK"
+      "gets a value"
+      (redis/get-value conn constant-key) => random-value)))
 
 (specification "save-form!"
-  (behavior "test mock"
-    (let [id            (str (ids/new-uuid))
-          conn          {}
-          redis-ok      "OK"
-          redis-get-val {:zuz :jix}
-          delta         {[::person/id id] {::person/id        id
-                                           ::person/full-name {:before "Jim" :after "Bob"}}}]
-      (assertions
-        "does shit"
-        (redis/test-mocking {:host "localhost" :port 12312} "foo" redis-get-val) => {})
-      ;(when-mocking
-      ;  (wcar conn redis-ok) =1x=> redis-ok
-      ;  (wcar conn redis-get-val) =1x=> redis-get-val
-      ;  (car/set k v) => redis-ok
-      ;  (car/get k) => redis-get-val
-      ;  (assertions
-      ;    "remaps temp ids to real ids"
-      ;    (redis/test-mocking {} "foo" redis-get-val) => redis-get-val))
-      ))
-  ;(behavior "adds new attributes"
-  ;  (let [tempid1 (tempid/tempid (ids/new-uuid 1))
-  ;        delta   {[::person/id tempid1] {::person/id        tempid1
-  ;                                        ::person/full-name {:after "Bob"}}}]
-  ;    (when-mocking
-  ;      (wcar _ _) => "OK"
-  ;      (car/set k v) =>
-  ;      (assertions
-  ;        "updates redis"
-  ;        k =fn=> #(string? %)
-  ;        v => {::person/id        k
-  ;              ::person/full-name "Bob"})
-  ;      (assertions
-  ;        "remaps temp ids to real ids"
-  ;        (get-in (redis/save-form! env {::form/delta delta}) [:tempids tempid1]) =fn=> #(string? %)))))
-  )
+  (behavior "adds new attributes"
+    (when-mocking
+      (redis/set-value _ _ _) => "OK"
+      (let [tempid1 (tempid/tempid (ids/new-uuid 1))
+            delta   {[::person/id tempid1] {::person/id        tempid1
+                                            ::person/full-name {:after "Bob"}}}]
+        (assertions
+          "remaps temp ids to real ids"
+          (get-in (redis/save-form! env {::form/delta delta}) [:tempids tempid1]) =fn=> #(string? %)))))
+  (behavior "updates existing attributes"
+    (let [real-id         (str (ids/new-uuid 1))
+          delta           {[::person/id real-id] {::person/id        real-id
+                                                  ::person/full-name {:before "Bob" :after "Bobby Sue"}}}
+          expected-update {::person/id        real-id
+                           ::person/full-name "Bobby Sue"}]
+      (when-mocking
+        (redis/get-value _ id) => (do (assertions
+                                        "by the correct ID"
+                                        id => real-id)
+                                      (assoc expected-update ::person/full-name "Bob"))
+        (redis/set-value _ id val) => (do (assertions
+                                            "with the new values"
+                                            id => real-id
+                                            val => expected-update))
+        (assertions
+          "remaps temp ids to real ids"
+          (redis/save-form! env {::form/delta delta}) =fn=> #(map? %))))))
 
