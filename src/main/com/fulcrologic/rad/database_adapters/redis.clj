@@ -38,12 +38,34 @@
 (defn get-value [conn k]
   (wcar conn (car/get k)))
 
+(defn delta->id-map [delta]
+  (reduce
+    (fn [acc [_ id]]
+      (if (tempid/tempid? id)
+        (assoc acc id (str (ids/new-uuid)))
+        acc))
+    {} (keys delta)))
+
+(defn delta->redis-value [delta idmap]
+  (reduce
+    (fn [acc [k v]]
+      (enc/if-let [redis-key get (idmap (second k))
+                   redis-val (cond-> v
+                               (get v (first k)) (assoc (first k) redis-key))
+                   redis-val (reduce-kv
+                               (fn [m k {:keys [after] :as v}]
+                                 (assoc m k (if after after v)))
+                               {} redis-val)]
+        (assoc acc redis-key redis-val)
+        acc))
+    {} delta))
+
 (defn save-form! [{::keys [connections] :as env} {::form/keys [delta]}]
   (let [conn                  (:redis connections)
         updated-attrs         (reduce-kv
                                 (fn [m [k id :as ident] v]
                                   (if (and (string? id) (not (tempid/tempid? id)))
-                                    (let [without-delta (reduce-kv (fn [m k {:keys [after] :as v}]
+                                    (let [without-delta #_"TASK: duplicate logic"(reduce-kv (fn [m k {:keys [after] :as v}]
                                                                      (assoc m k (if after after v))) {} v)]
                                       (assoc m id without-delta))
                                     m)) {} delta)

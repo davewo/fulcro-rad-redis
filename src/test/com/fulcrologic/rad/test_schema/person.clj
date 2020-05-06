@@ -11,4 +11,9 @@
    ::attr/identities #{::id}
    ::attr/required?  true})
 
+(defattr prescription ::prescription :ref
+  {::attr/schema     :redis
+   ::attr/target     :com.fulcrologic.rad.test-schema.prescription/id
+   ::attr/identities #{::id}})
+
 (def attributes [id full-name])
